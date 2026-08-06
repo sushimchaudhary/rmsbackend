@@ -1,0 +1,267 @@
+const prisma = require('../config/dbConnect').prisma || require('../config/dbConnect');
+const { emitEvent } = require('../utils/socket');
+
+// Rounding Helper (2 Decimal places)
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Bill Totals Calculation Helper Function
+const calculateTotals = (orderTotalAmount, discountPct = 0, vatPct = 13) => {
+  const subTotal = Number(orderTotalAmount);
+  const discountAmount = discountPct > 0 ? round2(subTotal * (discountPct / 100)) : 0.0;
+  const amountAfterDiscount = subTotal - discountAmount;
+  const vatAmount = vatPct > 0 ? round2(amountAfterDiscount * (vatPct / 100)) : 0.0;
+  const grandTotal = round2(amountAfterDiscount + vatAmount);
+
+  return {
+    sub_total: subTotal,
+    discount_amount: discountAmount,
+    vat_amount: vatAmount,
+    grand_total: grandTotal,
+  };
+};
+
+// Unique Bill Number Generator
+const generateBillNumber = () => {
+  const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD
+  const timeStr = new Date().toTimeString().slice(0, 5).replace(':', ''); // HHMM
+  const randomStr = Math.random().toString(36).substring(2, 5).toUpperCase(); // 3 Random Alpha-numeric
+  return `BILL-${dateStr}-${timeStr}-${randomStr}`;
+};
+
+// Invoice Data JSON Structure Ready for Frontend
+const buildInvoiceView = async (bill) => {
+  const orderId = bill.order_id || bill.order?.id;
+  const order = orderId
+    ? await prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          table: true,
+          items: true,
+        },
+      })
+    : null;
+
+  const orderItems = (order?.items || []).map((i) => ({
+    item_name: i.menu_item_name,
+    portion_name: i.portion_name,
+    quantity: i.quantity,
+    unit_price: Number(i.portion_price),
+    total_price: i.quantity * Number(i.portion_price),
+  }));
+
+  return {
+    id: bill.id,
+    bill_number: bill.bill_number || `BILL-${bill.id.slice(-6).toUpperCase()}`,
+    order_id: orderId,
+    order_number: order?.order_number || (orderId ? `#${orderId.slice(-6).toUpperCase()}` : '—'),
+    table_number: order?.table?.table_number || null,
+    order_items: orderItems,
+    sub_total: Number(bill.sub_total),
+    discount_percentage: Number(bill.discount_percentage),
+    discount_amount: Number(bill.discount_amount),
+    vat_percentage: Number(bill.vat_percentage),
+    vat_amount: Number(bill.vat_amount),
+    grand_total: Number(bill.grand_total),
+    payment_method: bill.payment_method,
+    is_paid: bill.is_paid,
+    branch_id: bill.branch_id,
+    created_at: bill.created_at,
+  };
+};
+
+// GET /bills/
+const getAll = async (req, res, next) => {
+  try {
+    const branchId = req.user?.branch_id || req.user?.branch;
+    const bills = await prisma.bill.findMany({
+      where: { branch_id: branchId },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const views = await Promise.all(bills.map(buildInvoiceView));
+    res.status(200).json(views);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /bills/:id
+const getOne = async (req, res, next) => {
+  try {
+    const branchId = req.user?.branch_id || req.user?.branch;
+
+    const bill = await prisma.bill.findFirst({
+      where: {
+        id: req.params.id,
+        branch_id: branchId,
+      },
+    });
+
+    if (!bill) {
+      return res.status(404).json({ error: 'Bill not found or Access denied.' });
+    }
+
+    res.status(200).json(await buildInvoiceView(bill));
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /bills/
+const createOne = async (req, res, next) => {
+  try {
+    const {
+      order_id: orderId,
+      discount_percentage: discountPct = 0.0,
+      vat_percentage: vatPct = 13.0,
+      payment_method: paymentMethod = 'cash',
+    } = req.body;
+
+    const userBranchId = req.user?.branch_id || req.user?.branch;
+
+    // Verify order belongs to user's branch
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        branch_id: userBranchId,
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found or Access denied.' });
+    }
+
+    // Totals calculation
+    const calculated = calculateTotals(order.total_amount, discountPct, vatPct);
+
+    // Atomic find-or-create using Prisma Upsert
+    const bill = await prisma.bill.upsert({
+      where: { order_id: order.id },
+      update: {
+        discount_percentage: discountPct,
+        vat_percentage: vatPct,
+        payment_method: paymentMethod,
+        ...calculated,
+      },
+      create: {
+        bill_number: generateBillNumber(),
+        order_id: order.id,
+        branch_id: userBranchId,
+        discount_percentage: discountPct,
+        vat_percentage: vatPct,
+        payment_method: paymentMethod,
+        ...calculated,
+      },
+    });
+
+    if (bill.branch_id && userBranchId && bill.branch_id !== userBranchId) {
+      return res.status(409).json({
+        error: 'A bill already exists for this order under a different branch.',
+      });
+    }
+
+    // Order state settle गर्ने
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        status: 'completed_settled',
+        payment_choice: 'pay_now',
+      },
+    });
+
+    const invoiceData = await buildInvoiceView(bill);
+    emitEvent('bill:created', invoiceData, ['admin', `order_${order.id}`]);
+    emitEvent('order:updated', updatedOrder, ['admin', `order_${order.id}`]);
+
+    res.status(201).json(invoiceData);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /bills/:id
+const updateOne = async (req, res, next) => {
+  try {
+    const branchId = req.user?.branch_id || req.user?.branch;
+
+    const bill = await prisma.bill.findFirst({
+      where: {
+        id: req.params.id,
+        branch_id: branchId,
+      },
+    });
+
+    if (!bill) {
+      return res.status(404).json({ error: 'Bill not found or Access denied.' });
+    }
+
+    const order = await prisma.order.findFirst({
+      where: {
+        id: bill.order_id,
+        branch_id: branchId,
+      },
+    });
+
+    const discountPct = req.body.discount_percentage !== undefined ? req.body.discount_percentage : Number(bill.discount_percentage);
+    const vatPct = req.body.vat_percentage !== undefined ? req.body.vat_percentage : Number(bill.vat_percentage);
+
+    let updateData = {};
+    if (req.body.discount_percentage !== undefined) updateData.discount_percentage = discountPct;
+    if (req.body.vat_percentage !== undefined) updateData.vat_percentage = vatPct;
+    if (req.body.payment_method !== undefined) updateData.payment_method = req.body.payment_method;
+    if (req.body.is_paid !== undefined) updateData.is_paid = req.body.is_paid;
+
+    if (order) {
+      const calculated = calculateTotals(order.total_amount, discountPct, vatPct);
+      updateData = { ...updateData, ...calculated };
+    }
+
+    const updatedBill = await prisma.bill.update({
+      where: { id: bill.id },
+      data: updateData,
+    });
+
+    const invoiceData = await buildInvoiceView(updatedBill);
+    emitEvent('bill:updated', invoiceData, ['admin', `order_${bill.order_id}`]);
+
+    res.status(200).json(invoiceData);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// DELETE /bills/:id
+const deleteOne = async (req, res, next) => {
+  try {
+    const branchId = req.user?.branch_id || req.user?.branch;
+
+    const bill = await prisma.bill.findFirst({
+      where: {
+        id: req.params.id,
+        branch_id: branchId,
+      },
+    });
+
+    if (!bill) {
+      return res.status(404).json({ error: 'Bill not found or Access denied.' });
+    }
+
+    await prisma.bill.delete({
+      where: { id: req.params.id },
+    });
+
+    emitEvent('bill:deleted', { id: req.params.id }, 'admin');
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = {
+  getAll,
+  getOne,
+  createOne,
+  updateOne,
+  deleteOne,
+  buildInvoiceView,
+};
