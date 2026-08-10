@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 
 async function createSuperUser() {
   console.log("🚀 Starting Super User creation...");
-  
+
   try {
     await connectDB();
 
@@ -30,22 +30,22 @@ async function createSuperUser() {
         username: "sushim",
         password: hashedPassword,
         email: "sushimchaudhary1@gmail.com",
-        role: "superadmin",
+        role: "super_admin",
         super_user: true,
-        is_staff: true,
+        is_admin: false,
+        is_staff: false,
       },
     });
 
     const token = jwt.sign(
       { userId: superUser.id, role: superUser.role },
       process.env.JWT_SECRET || "default_secret_key",
-      { expiresIn: "30d" }
+      { expiresIn: "30d" },
     );
 
     console.log("🎉 SUCCESS! Super user created successfully!");
     console.log("👤 Username:", superUser.username);
     console.log("🔑 Token:", token);
-
   } catch (err) {
     console.error("❌ ERROR creating super user:", err);
   } finally {

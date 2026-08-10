@@ -73,10 +73,49 @@ const buildOrderItem = async (raw) => {
 };
 
 // GET /orders/
+// const getAll = async (req, res, next) => {
+//   try {
+//     const branchId = req.user?.branch_id || req.user?.branch;
+//     const where = branchId ? { branch_id: branchId } : {};
+
+//     const orders = await prisma.order.findMany({
+//       where,
+//       include: {
+//         table: true,
+//         items: true,
+//       },
+//       orderBy: { created_at: 'desc' },
+//     });
+
+//     res.status(200).json(orders);
+//   } catch (err) {
+//     next(err);
+//   }
+// };
+
+
+// GET /orders/
 const getAll = async (req, res, next) => {
   try {
-    const branchId = req.user?.branch_id || req.user?.branch;
-    const where = branchId ? { branch_id: branchId } : {};
+    const userBranchId = req.user?.branch_id || req.user?.branch;
+    const userRestaurantId = req.user?.restaurant_id || req.user?.organization_id;
+
+    let where = {};
+
+    if (userBranchId) {
+      where.branch_id = String(userBranchId);
+    } else if (userRestaurantId) {
+      const orgBranches = await prisma.branch.findMany({
+        where: { 
+          restaurant_id: String(userRestaurantId) // 👈 organization_id को ठाउँमा restaurant_id
+        },
+        select: { id: true },
+      });
+
+      const branchIds = orgBranches.map((b) => String(b.id));
+
+      where.branch_id = { in: branchIds };
+    }
 
     const orders = await prisma.order.findMany({
       where,

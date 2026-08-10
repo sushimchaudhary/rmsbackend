@@ -23,6 +23,10 @@ const connectDB = async () => {
   try {
     await prisma.$connect();
     console.log("✅ PostgreSQL (Neon) connected successfully via PG Adapter!");
+
+    const { ensureDefaultPlans } = require("../utils/subscriptionUtils");
+    await ensureDefaultPlans();
+    console.log("✅ Default subscription plans ensured.");
   } catch (error) {
     console.error("❌ PostgreSQL connection failed:", error.message);
     process.exit(1);

@@ -5,12 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  
 }
-
-// =========================================================================
-// ENUMS
-// =========================================================================
 
 enum Role {
   staff
@@ -19,8 +14,8 @@ enum Role {
 }
 
 enum EmploymentType {
-  full_time @map("full-time")
-  part_time @map("part-time")
+  full_time  @map("full-time")
+  part_time  @map("part-time")
   contract
   intern
 }
@@ -48,17 +43,11 @@ enum PaymentChoice {
   pay_later
 }
 
-// 👈 Direct Subscription Payment हरूका लागि Payment Options हरू थप गरिएको छ
 enum PaymentMethod {
   esewa
   khalti
-  fonepay
-  connect_ips
-  stripe
-  bank_transfer
   cod
   card
-  cash
 }
 
 enum BillPaymentMethod {
@@ -79,49 +68,29 @@ enum ItemStatus {
   not_available
 }
 
-// Subscription Enums
-enum SubscriptionStatus {
-  trial
-  active
-  expired
-  cancelled
-}
-
-enum PlanType {
-  free_trial
-  monthly
-  yearly
-}
-
-// =========================================================================
-// SAVIK KA MODELS
-// =========================================================================
-
 model Restaurant {
-  id            String   @id @default(uuid())
-  name          String   @unique
+  id            String    @id @default(uuid())
+  name          String    @unique
   address       String
-  mobile_number String   @unique
+  mobile_number String    @unique
   logo          String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  branches               Branch[]
-  users                  User[]
-  notices                Notice[]
-  subscriptions          RestaurantSubscription[]
-  subscriptionPayments   SubscriptionPayment[]
+  branches      Branch[]
+  users         User[]
+  notices       Notice[]
 }
 
 model Branch {
-  id            String     @id @default(uuid())
+  id            String      @id @default(uuid())
   name          String
   address       String
   mobile_number String
   restaurant_id String
-  restaurant    Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  restaurant    Restaurant  @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   users                 User[]
   staffs                Staff[]
@@ -136,7 +105,6 @@ model Branch {
   categories            Category[]
   bills                 Bill[]
   orderItems            OrderItem[]
-  subscriptions         RestaurantSubscription[]
 }
 
 model User {
@@ -150,7 +118,7 @@ model User {
   address             String?
   role                String    @default("staff")
   super_user          Boolean   @default(false)
-  is_admin            Boolean   @default(false)
+  is_admin            Boolean   @default(true)
   is_staff            Boolean   @default(true)
   resetPasswordToken  String?
   resetPasswordExpire DateTime?
@@ -201,10 +169,10 @@ model Staff {
 }
 
 model SliderImage {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   image     String
   branch_id String?
-  branch    Branch?  @relation(fields: [branch_id], references: [id])
+  branch    Branch? @relation(fields: [branch_id], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -217,7 +185,8 @@ model RestaurantTable {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  branch Branch  @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
   orders Order[]
 
   @@unique([table_number, branch_id])
@@ -287,6 +256,8 @@ model MenuItemPrice {
   menuItem     MenuItem @relation(fields: [menu_item_id], references: [id], onDelete: Cascade)
 }
 
+
+
 model Order {
   id               String        @id @default(uuid())
   order_number     String        @unique
@@ -306,8 +277,8 @@ model Order {
   table      RestaurantTable? @relation(fields: [table_id], references: [id], onDelete: SetNull)
   branch     Branch           @relation(fields: [branch_id], references: [id], onDelete: Cascade)
   items      OrderItem[]
-  payments   Payment[]        // Customers Order Payments
-  bill       Bill?
+  payments     Payment[]
+  bill       Bill?            // 1-to-1 Relation with Bill
 
   @@index([branch_id, created_at])
   @@index([branch_id, seen])
@@ -330,12 +301,11 @@ model OrderItem {
   // Relations
   order     Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
   menuItem  MenuItem @relation(fields: [menu_item_id], references: [id])
-  branch    Branch?  @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  branch              Branch?  @relation(fields: [branch_id], references: [id], onDelete: Cascade)
 
   @@map("order_items")
 }
 
-// 🟢 Order Payment (ग्राहकले खानेकुरा अर्डर गर्दा गरिने भुक्तानी)
 model Payment {
   id             String        @id @default(uuid())
   transactionId  String        @unique
@@ -380,79 +350,23 @@ model Gallery {
 }
 
 model Bill {
-  id                  String            @id @default(uuid())
-  bill_number         String            @unique
-  order_id            String            @unique
+  id                  String        @id @default(uuid())
+  bill_number         String        @unique
+  order_id            String        @unique
   branch_id           String
-  discount_percentage Decimal           @default(0.0) @db.Decimal(5, 2)
-  vat_percentage      Decimal           @default(13.0) @db.Decimal(5, 2)
-  sub_total           Decimal           @default(0.0) @db.Decimal(10, 2)
-  discount_amount     Decimal           @default(0.0) @db.Decimal(10, 2)
-  vat_amount          Decimal           @default(0.0) @db.Decimal(10, 2)
-  grand_total         Decimal           @default(0.0) @db.Decimal(10, 2)
+  discount_percentage Decimal       @default(0.0) @db.Decimal(5, 2)
+  vat_percentage      Decimal       @default(13.0) @db.Decimal(5, 2)
+  sub_total           Decimal       @default(0.0) @db.Decimal(10, 2)
+  discount_amount     Decimal       @default(0.0) @db.Decimal(10, 2)
+  vat_amount          Decimal       @default(0.0) @db.Decimal(10, 2)
+  grand_total         Decimal       @default(0.0) @db.Decimal(10, 2)
   payment_method      BillPaymentMethod @default(cash) 
-  is_paid             Boolean           @default(false)
-  created_at          DateTime          @default(now())
+  is_paid             Boolean       @default(false)
+  created_at          DateTime      @default(now())
 
   // Relations
   order  Order  @relation(fields: [order_id], references: [id], onDelete: Cascade)
   branch Branch @relation(fields: [branch_id], references: [id], onDelete: Cascade)
 
   @@map("bills")
-}
-
-// =========================================================================
-// SUBSCRIPTION & DIRECT PAYMENTS MODELS
-// =========================================================================
-
-model SubscriptionPlan {
-  id             String     @id @default(uuid())
-  name           String     // E.g., "7-Day Trial", "Monthly Basic", "Yearly Premium"
-  type           PlanType   @default(monthly)
-  price          Decimal    @default(0.00) @db.Decimal(10, 2)
-  duration_days  Int        // उदा: 7, 30, वा 365
-  is_active      Boolean    @default(true)
-  created_at     DateTime   @default(now())
-  updated_at     DateTime   @updatedAt
-
-  subscriptions  RestaurantSubscription[]
-
-  @@map("subscription_plans")
-}
-
-model RestaurantSubscription {
-  id            String             @id @default(uuid())
-  restaurant_id String
-  branch_id     String?            // Branch Level Subscription को लागि
-  plan_id       String
-  status        SubscriptionStatus @default(trial)
-  start_date    DateTime           @default(now())
-  end_date      DateTime           
-  created_at    DateTime           @default(now())
-  updated_at    DateTime           @updatedAt
-
-  restaurant    Restaurant         @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
-  branch        Branch?            @relation(fields: [branch_id], references: [id], onDelete: Cascade)
-  plan          SubscriptionPlan   @relation(fields: [plan_id], references: [id])
-  payments      SubscriptionPayment[]
-
-  @@map("restaurant_subscriptions")
-}
-
-// 🟢 Direct Subscription Payment (रेष्टुरेन्ट/ब्रान्च मालिकले RMS चलाउनका लागि गर्ने पेमेन्ट)
-model SubscriptionPayment {
-  id              String        @id @default(uuid())
-  subscription_id String
-  restaurant_id   String
-  transaction_id  String        @unique
-  amount          Decimal       @db.Decimal(10, 2)
-  payment_method  PaymentMethod @default(esewa)
-  status          PaymentStatus @default(pending)
-  payment_details Json?
-  created_at      DateTime      @default(now())
-
-  subscription    RestaurantSubscription @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
-  restaurant      Restaurant             @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
-
-  @@map("subscription_payments")
 }
