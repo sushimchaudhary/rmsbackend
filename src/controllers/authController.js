@@ -331,17 +331,17 @@ exports.login = async (req, res) => {
       if (branch) {
         const branchCreatedDate = new Date(branch.createdAt);
         const trialEndDate = new Date(branchCreatedDate);
-        trialEndDate.setDate(branchCreatedDate.getDate() + 7); // ७ दिनको Trial
+        trialEndDate.setDate(branchCreatedDate.getDate() + 2); // 2 दिनको Trial
 
         const currentDate = new Date();
 
-        // यदि ७ दिनको Trial बितिसकेको छ भने Login ब्लक गर्ने
+        // यदि 2 दिनको Trial बितिसकेको छ भने Login ब्लक गर्ने
         if (currentDate > trialEndDate) {
           return res.status(402).json({
             success: false,
             is_expired: true,
             error_code: "SUBSCRIPTION_EXPIRED",
-            response: `The 1-week free trial for '${branch.name}' branch has expired (Created on: ${branchCreatedDate.toLocaleDateString()}). Please renew subscription to log in.`,
+            response: `The 1-month free trial for '${branch.name}' branch has expired (Created on: ${branchCreatedDate.toLocaleDateString()}). Please renew subscription to log in.`,
           });
         }
       }
