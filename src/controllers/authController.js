@@ -274,6 +274,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const { hashPassword, comparePassword } = require("../utils/userUtils");
+const { getBranchSubscriptionStatus } = require("../utils/subscriptionUtils");
 
 // 1. LOGIN (With Branch Trial/Subscription Check)
 exports.login = async (req, res) => {
@@ -325,27 +326,47 @@ exports.login = async (req, res) => {
     const isStaff = userRole === "staff" || Boolean(user.is_staff);
 
     // ⏳ 6. BRANCH TRIAL / SUBSCRIPTION CHECK (Superadmin बाहेक)
-    if (!isSuperAdmin) {
-      const branch = user.branch;
+    // if (!isSuperAdmin) {
+    //   const branch = user.branch;
 
-      if (branch) {
-        const branchCreatedDate = new Date(branch.createdAt);
-        const trialEndDate = new Date(branchCreatedDate);
-        trialEndDate.setDate(branchCreatedDate.getDate() + 2); // 2 दिनको Trial
+    //   if (branch) {
+    //     const branchCreatedDate = new Date(branch.createdAt);
+    //     const trialEndDate = new Date(branchCreatedDate);
+    //     trialEndDate.setDate(branchCreatedDate.getDate() + 2); // 2 दिनको Trial
 
-        const currentDate = new Date();
+    //     const currentDate = new Date();
 
-        // यदि 2 दिनको Trial बितिसकेको छ भने Login ब्लक गर्ने
-        if (currentDate > trialEndDate) {
-          return res.status(402).json({
-            success: false,
-            is_expired: true,
-            error_code: "SUBSCRIPTION_EXPIRED",
-            response: `The 1-month free trial for '${branch.name}' branch has expired (Created on: ${branchCreatedDate.toLocaleDateString()}). Please renew subscription to log in.`,
-          });
-        }
-      }
-    }
+    //     // यदि 2 दिनको Trial बितिसकेको छ भने Login ब्लक गर्ने
+    //     if (currentDate > trialEndDate) {
+    //       return res.status(402).json({
+    //         success: false,
+    //         is_expired: true,
+    //         error_code: "SUBSCRIPTION_EXPIRED",
+    //         response: `The 1-month free trial for '${branch.name}' branch has expired (Created on: ${branchCreatedDate.toLocaleDateString()}). Please renew subscription to log in.`,
+    //       });
+    //     }
+    //   }
+    // }
+    // ⏳ 6. BRANCH TRIAL / SUBSCRIPTION CHECK (Superadmin बाहेक)
+if (!isSuperAdmin && user.branch_id) {
+  // DB बाट Branch को पछिल्लो Subscription तान्ने
+  const latestSubscription = await prisma.restaurantSubscription.findFirst({
+    where: { branch_id: user.branch_id },
+    orderBy: { created_at: "desc" },
+    include: { plan: true },
+  });
+
+  const subStatus = getBranchSubscriptionStatus(user.branch, latestSubscription);
+
+  if (subStatus.is_expired) {
+    return res.status(402).json({
+      success: false,
+      is_expired: true,
+      error_code: "SUBSCRIPTION_EXPIRED",
+      response: `The subscription/trial for '${user.branch.name}' branch has expired. Please renew your subscription to log in.`,
+    });
+  }
+}
 
     // 🎟️ 7. Generate JWT Token
     const token = jwt.sign(

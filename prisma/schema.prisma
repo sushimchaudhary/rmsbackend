@@ -93,9 +93,6 @@ enum PlanType {
   yearly
 }
 
-// =========================================================================
-// SAVIK KA MODELS
-// =========================================================================
 
 model Restaurant {
   id            String   @id @default(uuid())
@@ -103,6 +100,8 @@ model Restaurant {
   address       String
   mobile_number String   @unique
   logo          String?
+  pan_number    String?  @unique
+  vat_number    String?  @unique
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -118,6 +117,8 @@ model Branch {
   name          String
   address       String
   mobile_number String
+  branch_code   String?  
+   
   restaurant_id String
   restaurant    Restaurant @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
   createdAt     DateTime   @default(now())
@@ -137,6 +138,8 @@ model Branch {
   bills                 Bill[]
   orderItems            OrderItem[]
   subscriptions         RestaurantSubscription[]
+
+  @@unique([branch_code, restaurant_id]) 
 }
 
 model User {
@@ -251,6 +254,7 @@ model OrganizationalDetail {
   telephone_number String
   branch_id        String?
   branch           Branch?  @relation(fields: [branch_id], references: [id])
+  pan_vat_number   String?  // Bill को Header मा छापिने PAN/VAT ID
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -290,6 +294,7 @@ model MenuItemPrice {
 model Order {
   id               String        @id @default(uuid())
   order_number     String        @unique
+  bill_number      String?
   table_id         String?
   branch_id        String
   status           OrderStatus   @default(pending)
@@ -384,6 +389,12 @@ model Bill {
   bill_number         String            @unique
   order_id            String            @unique
   branch_id           String
+
+  seller_pan          String?
+
+  ird_synced          Boolean           @default(false)
+  ird_qr_code         String?
+  
   discount_percentage Decimal           @default(0.0) @db.Decimal(5, 2)
   vat_percentage      Decimal           @default(13.0) @db.Decimal(5, 2)
   sub_total           Decimal           @default(0.0) @db.Decimal(10, 2)
