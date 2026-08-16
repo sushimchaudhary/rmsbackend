@@ -5,7 +5,7 @@ const {
   upsertAccount,
   getAccounts,
   deactivateAccount,
-} = require("../controllers/merchantAccountController");
+} = require("../controllers/merchantaccountController");
 
 const adminOrSuperUser = require("../middleware/adminOrSuperUser");
 
