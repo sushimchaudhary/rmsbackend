@@ -253,7 +253,7 @@
 const crypto = require('crypto');
 const { prisma } = require('../config/dbConnect');
 const { emitEvent } = require('../utils/socket');
-const { resolveMerchantAccount } = require('../services/merchantAccountService');
+const { resolveMerchantAccount } = require('../services/merchantaccountService');
 
 const FRONTEND_URL = process.env.FRONTEND_MENU_URL;
 const BACKEND_URL = process.env.BACKEND_URL;
