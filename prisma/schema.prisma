@@ -93,6 +93,41 @@ enum PlanType {
   yearly
 }
 
+enum MerchantProvider {
+  esewa
+  khalti
+}
+
+enum MerchantScope {
+  restaurant
+  branch
+}
+
+model MerchantAccount {
+  id     String        @id @default(uuid())
+  scope  MerchantScope
+  provider MerchantProvider
+
+  restaurant_id String?
+  branch_id     String?
+
+  encrypted_secret_key String  @db.Text
+  product_code          String? 
+  public_key             String? 
+
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  restaurant Restaurant? @relation(fields: [restaurant_id], references: [id], onDelete: Cascade)
+  branch     Branch?     @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+
+  @@unique([restaurant_id, provider, branch_id])
+  @@index([restaurant_id])
+  @@index([branch_id])
+  @@map("merchant_accounts")
+}
+
 
 model Restaurant {
   id            String   @id @default(uuid())
@@ -110,6 +145,7 @@ model Restaurant {
   notices                Notice[]
   subscriptions          RestaurantSubscription[]
   subscriptionPayments   SubscriptionPayment[]
+  merchantAccounts       MerchantAccount[] 
 }
 
 model Branch {
@@ -138,6 +174,7 @@ model Branch {
   bills                 Bill[]
   orderItems            OrderItem[]
   subscriptions         RestaurantSubscription[]
+  merchantAccounts       MerchantAccount[] 
 
   @@unique([branch_code, restaurant_id]) 
 }

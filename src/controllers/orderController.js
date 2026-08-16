@@ -1389,7 +1389,7 @@ const handlePaymentSuccess = async (req, res, next) => {
     });
 
     if (!order) {
-      return res.status(404).json({ error: 'Order भेटिएन।' });
+      return res.status(404).json({ error: 'Order didnot found' });
     }
 
     const generatedBillNum = billController.generateBillNumber();

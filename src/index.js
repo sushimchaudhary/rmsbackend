@@ -57,7 +57,7 @@ app.use("/api/ai",  checkSubscriptionStatus, require('./routes/aiRoutes'));
 app.use("/api/tenant",  checkSubscriptionStatus, require('./routes/tenantRoutes'));
 app.use("/api/dashboard",  checkSubscriptionStatus, require('./routes/dashboardRoutes'));
 app.use("/api/subscriptions", require("./routes/subscriptionRoutes"));
-
+app.use("/api/merchant-accounts", checkSubscriptionStatus, require("./routes/merchantAccountRoutes"));
 
 // Main API index routes
 app.use("/api",  checkSubscriptionStatus, require("./routes/index"));
