@@ -47,7 +47,7 @@ router
   .post(
     protect,
     editorOnly,
-    uploader.single("image"),
+    uploader.array("images", 10), // 🟢 धेरै फाइलहरू लिनको लागि array प्रयोग गर्ने
     galleryCtrl.createOne
   );
 
@@ -57,17 +57,12 @@ router
   .put(
     protect,
     editorOnly,
-    uploader.single("image"),
-    galleryCtrl.updateOne
-  )
-  .patch(
-    protect,
-    editorOnly,
-    uploader.single("image"),
+    uploader.array("images", 10),
     galleryCtrl.updateOne
   )
   .delete(protect, editorOnly, galleryCtrl.deleteOne);
 
+  
 // --- Staff ---
 router
   .route("/staff")
@@ -109,7 +104,6 @@ router
 
 
 
-
 // --- Slider Images ---
 router
   .route("/sliders")
@@ -117,7 +111,7 @@ router
   .post(
     protect,
     editorOnly,
-    uploader.single("image"),
+    uploader.array("images", 10),
     sliderCtrl.createOne
   );
 
@@ -127,17 +121,16 @@ router
   .put(
     protect,
     editorOnly,
-    uploader.single("image"),
+    uploader.array("images", 10),
     sliderCtrl.updateOne
   )
   .patch(
     protect,
     editorOnly,
-    uploader.single("image"),
+    uploader.array("images", 10),
     sliderCtrl.updateOne
   )
   .delete(protect, editorOnly, sliderCtrl.deleteOne);
-
 
 // --- Notices ---
 router

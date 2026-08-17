@@ -9,7 +9,7 @@ const getAll = async (req, res, next) => {
 
     const docs = await prisma.sliderImage.findMany({
       where: { branch_id: branchId },
-      orderBy: { id: 'desc' }, // 👈 createdAt को साटो 'id' वा 'createdAt' दुवै सुरक्षित रूपमा प्रयोग गर्न सकिन्छ
+      orderBy: { id: 'desc' },
     });
 
     res.status(200).json(docs);
@@ -38,39 +38,40 @@ const getOne = async (req, res, next) => {
 };
 
 // POST /slider-images/
-// POST /slider-images/
 const createOne = async (req, res, next) => {
   try {
     const branchId = req.user.branch_id || req.user.branch;
 
-    // 1️⃣ Photo पठाइएको छ कि छैन चेक गर्ने (Image नभई Create नहोस्)
-    if (!req.file && !req.body.image) {
-      return res.status(400).json({ error: 'Slider image file is required.' });
+    // 1️⃣ Multiple files (req.files) वा single/array image check गर्ने
+    const files = req.files || (req.file ? [req.file] : []);
+    const bodyImages = req.body.images || req.body.image || [];
+    const parsedBodyImages = Array.isArray(bodyImages) ? bodyImages : [bodyImages].filter(Boolean);
+
+    if (files.length === 0 && parsedBodyImages.length === 0) {
+      return res.status(400).json({ error: 'Slider image files are required.' });
     }
 
-    const payload = {
-      image: '', // Default empty string
-      branch_id: branchId || null,
-    };
+    let imageUrls = [...parsedBodyImages];
 
-    // 2️⃣ Cloudinary Upload Logic
-    if (req.file) {
-      const result = await uploadToCloudinary(
-        req.file.buffer,
-        'kitchenos/sliders'
+    // 2️⃣ Multiple files हरूलाई Cloudinary मा upload गर्ने
+    if (files.length > 0) {
+      const uploadPromises = files.map(file =>
+        uploadToCloudinary(file.buffer, 'kitchenos/sliders')
       );
-      payload.image = result.secure_url;
-    } else if (req.body.image) {
-      payload.image = req.body.image;
+      const results = await Promise.all(uploadPromises);
+      const uploadedUrls = results.map(result => result.secure_url);
+      imageUrls = [...imageUrls, ...uploadedUrls];
     }
 
-    // 3️⃣ DB Insert गर्दा 'image' खाली छैन भन्ने निश्चित गर्ने
-    if (!payload.image) {
-      return res.status(400).json({ error: 'Failed to process slider image URL.' });
+    if (imageUrls.length === 0) {
+      return res.status(400).json({ error: 'Failed to process slider image URLs.' });
     }
 
     const doc = await prisma.sliderImage.create({
-      data: payload,
+      data: {
+        images: imageUrls, // 👈 Array save हुन्छ
+        branch_id: branchId || null,
+      },
     });
 
     emitEvent('slider:created', doc);
@@ -80,7 +81,60 @@ const createOne = async (req, res, next) => {
     next(err);
   }
 };
+
 // PUT /slider-images/:id
+// const updateOne = async (req, res, next) => {
+//   try {
+//     const branchId = req.user.branch_id || req.user.branch;
+
+//     const existingDoc = await prisma.sliderImage.findFirst({
+//       where: {
+//         id: req.params.id,
+//         branch_id: branchId,
+//       },
+//     });
+
+//     if (!existingDoc) return res.status(404).json({ error: 'Slider image not found or Access denied.' });
+
+//     let updatePayload = { ...req.body };
+//     let finalImages = existingDoc.images || [];
+
+//     // यदि नयाঁ images पठाएको छ भने (append वा replace गर्न मिल्ने गरी)
+//     if (req.body.images) {
+//       finalImages = Array.isArray(req.body.images) ? req.body.images : [req.body.images];
+//     }
+
+//     // ✅ नयाँ Multiple Photos पठाएको छ भने Cloudinary मा Upload गरेर थप्ने वा update गर्ने
+//     const files = req.files || (req.file ? [req.file] : []);
+//     if (files.length > 0) {
+//       const uploadPromises = files.map(file =>
+//         uploadToCloudinary(file.buffer, 'kitchenos/sliders')
+//       );
+//       const results = await Promise.all(uploadPromises);
+//       const newUploadedUrls = results.map(result => result.secure_url);
+      
+//       // यदि नयाँ upload गर्दा पुरानैमा थप्ने हो भने:
+//       // finalImages = [...finalImages, ...newUploadedUrls];
+//       // वा पूर्ण रूपमा नयाँ मात्र राख्ने हो भने:
+//       finalImages = newUploadedUrls;
+//     }
+
+//     updatePayload.images = finalImages;
+//     delete updatePayload.image; // पुरानो single field हटाइएको
+
+//     const doc = await prisma.sliderImage.update({
+//       where: { id: req.params.id },
+//       data: updatePayload,
+//     });
+
+//     emitEvent('slider:updated', doc);
+//     res.status(200).json(doc);
+//   } catch (err) {
+//     next(err);
+//   }
+// };
+
+// PUT / slider-images/:id
 const updateOne = async (req, res, next) => {
   try {
     const branchId = req.user.branch_id || req.user.branch;
@@ -94,22 +148,34 @@ const updateOne = async (req, res, next) => {
 
     if (!existingDoc) return res.status(404).json({ error: 'Slider image not found or Access denied.' });
 
-    const updatePayload = { ...req.body };
+    let finalImages = [];
 
-    // ✅ नयाँ Photo पठाएको छ भने Cloudinary मा Upload गर्ने
-    if (req.file) {
-      const result = await uploadToCloudinary(
-        req.file.buffer,
-        'kitchenos/sliders'
+    // १. Frontend बाट पठाएको पुरानो बायोग्राफी/इमेजेजहरूको लिस्ट लिनुहोस् (यदि JSON वा form-data मा आएको छ भने)
+    if (req.body.existingImages) {
+      const parsed = JSON.parse(req.body.existingImages);
+      finalImages = Array.isArray(parsed) ? parsed : [parsed];
+    } else if (req.body.images && Array.isArray(req.body.images)) {
+      finalImages = req.body.images;
+    } else {
+      finalImages = existingDoc.images || [];
+    }
+
+    // २. नयाँ फाइलहरू upload गर्ने र अन्तिम array मा जोड्ने
+    const files = req.files || (req.file ? [req.file] : []);
+    if (files.length > 0) {
+      const uploadPromises = files.map(file =>
+        uploadToCloudinary(file.buffer, 'kitchenos/sliders')
       );
+      const results = await Promise.all(uploadPromises);
+      const newUploadedUrls = results.map(result => result.secure_url);
       
-      const targetField = req.file.fieldname || 'image';
-      updatePayload[targetField] = result.secure_url;
+      // पुरानो राखेर नयाँ थप्ने वा replace गर्ने
+      finalImages = [...finalImages, ...newUploadedUrls];
     }
 
     const doc = await prisma.sliderImage.update({
       where: { id: req.params.id },
-      data: updatePayload,
+      data: { images: finalImages },
     });
 
     emitEvent('slider:updated', doc);

@@ -1,3 +1,5 @@
+
+
 // const multer = require("multer");
 
 // const storage = multer.memoryStorage();
@@ -33,10 +35,34 @@
 //       next();
 //     });
 //   },
+
+//   // 👈 Added fields handler for multiple field uploads (e.g. image + accountQrCode)
+//   fields: (fieldsArray) => (req, res, next) => {
+//     upload.fields(fieldsArray)(req, res, (err) => {
+//       if (err instanceof multer.MulterError) {
+//         if (err.code === "LIMIT_FILE_SIZE") {
+//           return res.status(400).json({
+//             error: "File is too large! Maximum allowed size is 9MB.",
+//           });
+//         }
+
+//         return res.status(400).json({
+//           error: err.message,
+//         });
+//       }
+
+//       if (err) {
+//         return res.status(500).json({
+//           error: err.message,
+//         });
+//       }
+
+//       next();
+//     });
+//   },
 // });
 
 // module.exports = { makeUploader };
-
 
 
 const multer = require("multer");
@@ -75,9 +101,33 @@ const makeUploader = () => ({
     });
   },
 
-  // 👈 Added fields handler for multiple field uploads (e.g. image + accountQrCode)
   fields: (fieldsArray) => (req, res, next) => {
     upload.fields(fieldsArray)(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({
+            error: "File is too large! Maximum allowed size is 9MB.",
+          });
+        }
+
+        return res.status(400).json({
+          error: err.message,
+        });
+      }
+
+      if (err) {
+        return res.status(500).json({
+          error: err.message,
+        });
+      }
+
+      next();
+    });
+  },
+
+  // 👇 यो 'array' मेथड मात्र तल थप्नुहोस् (बाँकी कोड जस्ताको तस्तै रहनेछ)
+  array: (fieldName, maxCount) => (req, res, next) => {
+    upload.array(fieldName, maxCount)(req, res, (err) => {
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({

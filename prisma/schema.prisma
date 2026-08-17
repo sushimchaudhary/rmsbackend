@@ -242,7 +242,7 @@ model Staff {
 
 model SliderImage {
   id        String   @id @default(uuid())
-  image     String
+  images    String[]
   branch_id String?
   branch    Branch?  @relation(fields: [branch_id], references: [id])
   createdAt DateTime @default(now())
@@ -414,7 +414,7 @@ model Notice {
 model Gallery {
   id         String   @id @default(uuid())
   title      String
-  image      String
+  images     String[]
   video_url  String?
   created_at DateTime @default(now())
   branch_id  String?

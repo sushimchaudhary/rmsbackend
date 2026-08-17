@@ -227,20 +227,76 @@ const processBodyAndFiles = async (req, resource, defaultImageField = 'image') =
   delete data.restaurant;
 
   // 2. Multi-part Form Data बाट आएका Image/QR codes upload गर्ने
+  // const folderName = `kitchenos/${resource || 'general'}`;
+  // let uploadedQrCode = null;
+
+  // if (req.files) {
+  //   for (const fieldname of Object.keys(req.files)) {
+  //     const fileArray = req.files[fieldname];
+  //     if (fileArray && fileArray.length > 0) {
+  //       const file = fileArray[0];
+  //       const result = await uploadToCloudinary(file.buffer, folderName);
+
+  //       if (fieldname === 'accountQrCode') {
+  //         uploadedQrCode = result.secure_url;
+  //       } else {
+  //         data[fieldname] = result.secure_url;
+  //       }
+  //     }
+  //   }
+  // } else if (req.file) {
+  //   const result = await uploadToCloudinary(req.file.buffer, folderName);
+  //   const targetField = req.file.fieldname || defaultImageField;
+
+  //   if (targetField === 'accountQrCode') {
+  //     uploadedQrCode = result.secure_url;
+  //   } else {
+  //     data[targetField] = result.secure_url;
+  //   }
+  // }
+
+
+
+  // 2. Multi-part Form Data बाट आएका Image/QR codes / Multiple Images upload गर्ने
   const folderName = `kitchenos/${resource || 'general'}`;
   let uploadedQrCode = null;
+  const imageUrls = [];
 
   if (req.files) {
-    for (const fieldname of Object.keys(req.files)) {
-      const fileArray = req.files[fieldname];
-      if (fileArray && fileArray.length > 0) {
-        const file = fileArray[0];
+    // यदि Multer ले array वा object पठाएको छ भने चेक गर्ने
+    if (Array.isArray(req.files)) {
+      // यदि सीधै array अफ फाइल्स आएको छ (jastai: uploader.array('images'))
+      for (const file of req.files) {
         const result = await uploadToCloudinary(file.buffer, folderName);
+        imageUrls.push(result.secure_url);
+      }
+      if (imageUrls.length > 0) {
+        data.images = imageUrls; // Array को रूपमा सेभ हुनेछ
+      }
+    } else {
+      // यदि fieldname अनुसार object आएको छ (jastai: fields mapping)
+      for (const fieldname of Object.keys(req.files)) {
+        const fileArray = req.files[fieldname];
+        if (fileArray && fileArray.length > 0) {
+          // यदि कुनै field मा मल्टिप्ले फाइलहरू छन् भने
+          if (fileArray.length > 1 || fieldname === 'images') {
+            const multiUrls = [];
+            for (const file of fileArray) {
+              const result = await uploadToCloudinary(file.buffer, folderName);
+              multiUrls.push(result.secure_url);
+            }
+            data[fieldname] = multiUrls;
+          } else {
+            // सिंगल फाइल भएमा
+            const file = fileArray[0];
+            const result = await uploadToCloudinary(file.buffer, folderName);
 
-        if (fieldname === 'accountQrCode') {
-          uploadedQrCode = result.secure_url;
-        } else {
-          data[fieldname] = result.secure_url;
+            if (fieldname === 'accountQrCode') {
+              uploadedQrCode = result.secure_url;
+            } else {
+              data[fieldname] = result.secure_url;
+            }
+          }
         }
       }
     }
