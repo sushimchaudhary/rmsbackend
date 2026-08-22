@@ -61,6 +61,8 @@ app.use("/api/merchant-accounts", checkSubscriptionStatus, require("./routes/mer
 
 // Main API index routes
 app.use("/api",  checkSubscriptionStatus, require("./routes/index"));
+app.use("/api/public", require("./routes/publicRoutes"));
+
 
 // ── Global Error Handling Middleware ─────────────────────────────────────────
 app.use((err, req, res, next) => {
