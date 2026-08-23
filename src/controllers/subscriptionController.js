@@ -529,6 +529,74 @@ exports.getBranchSubscription = async (req, res) => {
 // ==========================================
 // 5. ASSIGN FREE TRIAL / DIRECT ASSIGN
 // ==========================================
+// exports.assignBranchSubscription = async (req, res) => {
+//   try {
+//     let { branch_id, plan_type, plan_id } = req.body;
+
+//     if (!branch_id) {
+//       return res.status(400).json({ response: "branch_id is required." });
+//     }
+
+//     const branch = await prisma.branch.findUnique({ where: { id: branch_id } });
+//     if (!branch) return res.status(404).json({ response: "Branch not found." });
+
+//     if (!req.user.super_user && branch.restaurant_id !== req.user.restaurant_id) {
+//       return res.status(403).json({ response: "Access denied." });
+//     }
+
+//     if (plan_type && !VALID_PLAN_TYPES.includes(plan_type)) {
+//       return res.status(400).json({
+//         response: `Invalid plan_type. Must be one of: ${VALID_PLAN_TYPES.join(", ")}`,
+//       });
+//     }
+
+//     const result = await prisma.$transaction(async (tx) => {
+//       let plan;
+//       if (plan_id) {
+//         plan = await tx.subscriptionPlan.findUnique({ where: { id: plan_id } });
+//         if (!plan || !plan.is_active) throw new Error("Subscription plan not found or inactive.");
+//       } else {
+//         plan = await tx.subscriptionPlan.findFirst({
+//           where: { type: plan_type || "monthly", is_active: true },
+//         });
+//         if (!plan) throw new Error(`No active plan found for type: ${plan_type || "monthly"}`);
+//       }
+
+//       const startDate = new Date();
+//       const endDate = calculateEndDate(startDate, plan.duration_days);
+//       const status = plan.type === "free_trial" ? "trial" : "active";
+
+//       const subscription = await tx.restaurantSubscription.create({
+//         data: {
+//           restaurant_id: branch.restaurant_id,
+//           branch_id: branch.id,
+//           plan_id: plan.id,
+//           status,
+//           start_date: startDate,
+//           end_date: endDate,
+//         },
+//         include: { plan: true },
+//       });
+
+//       return subscription;
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Subscription assigned successfully.",
+//       subscription: result,
+//       status: getBranchSubscriptionStatus(branch, result),
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ response: error.message || "Failed to assign subscription." });
+//   }
+// };
+
+
+// ==========================================
+// 5. ASSIGN FREE TRIAL / DIRECT ASSIGN
+// ==========================================
 exports.assignBranchSubscription = async (req, res) => {
   try {
     let { branch_id, plan_type, plan_id } = req.body;
@@ -562,6 +630,22 @@ exports.assignBranchSubscription = async (req, res) => {
         if (!plan) throw new Error(`No active plan found for type: ${plan_type || "monthly"}`);
       }
 
+      // 🛑 1. FREE TRIAL RE-USE CHECK (यदि प्लान free_trial हो भने जाँच्ने)
+      if (plan.type === "free_trial") {
+        const existingTrial = await tx.restaurantSubscription.findFirst({
+          where: {
+            branch_id: branch.id,
+            plan: {
+              type: "free_trial",
+            },
+          },
+        });
+
+        if (existingTrial) {
+          throw new Error("This branch has already claimed a free trial. Please upgrade to a paid plan.");
+        }
+      }
+
       const startDate = new Date();
       const endDate = calculateEndDate(startDate, plan.duration_days);
       const status = plan.type === "free_trial" ? "trial" : "active";
@@ -589,10 +673,9 @@ exports.assignBranchSubscription = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ response: error.message || "Failed to assign subscription." });
+    res.status(400).json({ response: error.message || "Failed to assign subscription." });
   }
 };
-
 // ==========================================
 // 6. INITIATE ESEWA SUBSCRIPTION
 // ==========================================
