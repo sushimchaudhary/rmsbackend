@@ -162,8 +162,8 @@
 
 const { prisma } = require("../config/dbConnect");
 
-const TRIAL_DURATION_DAYS = 2;
-// const TRIAL_DURATION_DAYS = 30;
+// const TRIAL_DURATION_DAYS = 2;
+const TRIAL_DURATION_DAYS = 30;
 const MONTHLY_DURATION_DAYS = 30;
 const YEARLY_DURATION_DAYS = 365;
 
