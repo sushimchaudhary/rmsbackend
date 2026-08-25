@@ -11,6 +11,7 @@ const path = require("path");
 const multer = require("multer");
 const { initSocket } = require("./utils/socket"); 
 const { checkSubscriptionStatus } = require('./middleware/checkSubscription');
+const { ensureDefaultPlans } = require('./utils/subscriptionUtils'); 
 
 connectDB();
 
@@ -87,10 +88,17 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log(`Local Access: http://localhost:${PORT}`);
-    console.log(`Network Access: http://192.168.x.x:${PORT}`); 
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`Local Access: http://localhost:${PORT}`);
+  console.log(`Network Access: http://192.168.x.x:${PORT}`); 
+
+  try {
+    await ensureDefaultPlans();
+    console.log("Subscription plans updated successfully in Database.");
+  } catch (error) {
+    console.error("Failed to update default subscription plans:", error);
+  }
 });
 
 

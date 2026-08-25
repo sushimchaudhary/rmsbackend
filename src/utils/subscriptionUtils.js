@@ -163,13 +163,13 @@
 const { prisma } = require("../config/dbConnect");
 
 // const TRIAL_DURATION_DAYS = 2;
-const TRIAL_DURATION_DAYS = 30;
+const TRIAL_DURATION_DAYS = 15;
 const MONTHLY_DURATION_DAYS = 30;
 const YEARLY_DURATION_DAYS = 365;
 
 const DEFAULT_PLANS = [
   {
-    name: "1-Month Free Trial",
+    name: "15 Days Free Trial",
     type: "free_trial",
     price: 0,
     duration_days: TRIAL_DURATION_DAYS,
